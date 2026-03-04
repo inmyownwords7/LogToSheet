@@ -1,0 +1,25 @@
+{
+  "name": "loggerlib",
+  "version": "1.0.0",
+  "description": "A Google Apps Script library for logging events to a Google Sheet.",
+  "main": "dist/logger.js",
+  "types": "dist/types.d.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsx esbuild.config.ts",
+    "copy": "node scripts/copy-manifest.mjs",
+    "push": "npm run build && npm run copy && clasp push",
+    "open": "clasp open-script"
+  },
+  "devDependencies": {
+    "@types/google-apps-script": "^2.0.8",
+    "@types/node": "^25.3.3",
+    "esbuild": "^0.27.3",
+    "notion-types": "^7.8.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@slack/web-api": "^7.14.1"
+  }
+}
