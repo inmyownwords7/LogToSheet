@@ -1,75 +1,123 @@
 # GAS LoggerLib
 
-A structured logging library for **Google Apps Script** that writes operational and HTTP/network logs to **Google Sheets**.
+A structured logging library for **Google Apps Script** that writes
+**operational logs** and **HTTP/network logs** to **Google Sheets**.
 
-Inspired by **Winston** and **Morgan**, this library provides structured logs and a simple pipeline system while staying native to the GAS ecosystem.
+LoggerLib is inspired by logging tools such as **Winston** (structured
+application logging) and **Morgan** (HTTP request logging), but designed
+specifically for the **Google Apps Script + Google Sheets ecosystem**.
 
----
+------------------------------------------------------------------------
+
+# Overview
+
+LoggerLib provides a consistent way to record:
+
+-   application events
+-   workflow execution steps
+-   debugging information
+-   API requests and responses
+-   operational audit trails
+
+Logs are stored in **Google Sheets**, making them easy to:
+
+-   review
+-   filter
+-   sort
+-   audit
+-   export
+
+------------------------------------------------------------------------
 
 # Features
 
-- Structured logs (`ts`, `logId`, `level`, `message`, `meta`)
-- HTTP/network logging
-- Google Sheets transport
-- Customizable sheet names
-- Overrideable column headers
-- Singleton logger for simple usage
-- Multiple logger instances if needed
-- TypeScript-first design
+-   Structured log records
+-   Separate **Operational Logs** and **Network Logs**
+-   Google Sheets transport built-in
+-   Configurable spreadsheet and sheet names
+-   Customizable column headers
+-   Singleton logger for simple scripts
+-   Multiple logger instances for advanced workflows
+-   TypeScript-first architecture
+-   Native `Date` timestamps compatible with Google Sheets
 
----
+------------------------------------------------------------------------
 
 # Log Types
 
 ## Operational Logs
 
-Represents application events such as:
+Operational logs represent **internal events in your script**.
 
-- workflows
-- tasks
-- background processes
-- internal state changes
+Examples include:
 
-Example row:
+-   workflow started
+-   workflow finished
+-   sync tasks
+-   validation results
+-   background jobs
+-   state changes
 
-| ts | logId | level | system | action | target | outcome | message | metaJson |
-|----|------|------|------|------|------|------|------|------|
-| 2026-03-04T17:10:25Z | a8f3d21 | INFO | SLACK | syncUsers | IDX_Slack | OK | Slack user sync completed | {"count":24} |
+### Example Row
 
----
+  --------------------------------------------------------------------------
+  ts         logId           level           message         metaJson
+  ---------- --------------- --------------- --------------- ---------------
+  3/4/2026   a8f3d21         INFO            Slack user sync {"count":24}
+  12:10:25                                   completed       
+
+  --------------------------------------------------------------------------
+
+`ts` is stored as a **Google Sheets datetime value**, not just text.\
+This allows sorting, filtering, and date calculations.
+
+------------------------------------------------------------------------
 
 ## Network Logs
 
-Represents HTTP/API requests.
+Network logs represent **HTTP or API requests**.
 
-Example row:
+Examples include:
 
-| ts | logId | level | system | method | endpoint | url | status | durationMs | requestBytes | responseBytes | queryJson | metaJson | errorMessage |
-|----|------|------|------|------|------|------|------|------|------|------|------|------|------|
-| 2026-03-04T17:10:30Z | b1f2a31 | HTTP | NOTION | POST | queryDatabase | https://api.notion.com/v1/databases/... | 200 | 312 | | 2048 | {} | {"cursor":true} | |
+-   Slack API requests
+-   Notion API queries
+-   Google API responses
+-   failed HTTP requests
+-   request duration tracking
 
----
+### Example Row
+
+  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  ts         logId     level   system   method   endpoint        url                                       status   durationMs   requestBytes   responseBytes   queryJson   metaJson          errorMessage
+  ---------- --------- ------- -------- -------- --------------- ----------------------------------------- -------- ------------ -------------- --------------- ----------- ----------------- --------------
+  3/4/2026   b1f2a31   HTTP    NOTION   POST     queryDatabase   https://api.notion.com/v1/databases/...   200      312                         2048            {}          {"cursor":true}   
+  12:10:30                                                                                                                                                                                    
+
+  ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------
 
 # Installation
 
-## Option 1 — Google Apps Script Library
+## Option 1 --- Google Apps Script Library
 
-1. Open your Apps Script project
-2. Go to **Extensions → Apps Script → Libraries**
-3. Add the **Script ID** of this library
-4. Set the identifier to:
+1.  Open your Apps Script project
+2.  Open **Libraries**
+3.  Add the **Script ID** of this library
+4.  Set the identifier to:
 
+```{=html}
+<!-- -->
 ```
-LoggerLib
-```
+    LoggerLib
 
----
+------------------------------------------------------------------------
 
-# Basic Usage
+# Quick Start
 
 Initialize the logger once per execution.
 
-```javascript
+``` javascript
 function appInitLogger() {
 
   LoggerLib.init({
@@ -82,48 +130,70 @@ function appInitLogger() {
 }
 ```
 
----
+------------------------------------------------------------------------
 
 # Writing Logs
 
 ## Operational Log
 
-```javascript
+``` javascript
 LoggerLib.log({
   message: "Identity sync started",
   meta: { source: "identityBuild" }
 });
 ```
 
----
+------------------------------------------------------------------------
 
 ## Debug Log
 
-```javascript
+``` javascript
 LoggerLib.debug({
   message: "Fetched Slack users",
   meta: { count: users.length }
 });
 ```
 
----
+------------------------------------------------------------------------
 
-## Error Log
+## Info Log
 
-```javascript
-LoggerLib.error({
-  message: "Slack API failed",
-  error: err
+``` javascript
+LoggerLib.info({
+  message: "Sync completed",
+  meta: { processed: 24 }
 });
 ```
 
----
+------------------------------------------------------------------------
+
+## Warning Log
+
+``` javascript
+LoggerLib.warn({
+  message: "Record missing optional field",
+  meta: { field: "teamName" }
+});
+```
+
+------------------------------------------------------------------------
+
+## Error Log
+
+``` javascript
+LoggerLib.error({
+  message: "Slack API failed",
+  meta: { operation: "users.list" }
+});
+```
+
+------------------------------------------------------------------------
 
 # HTTP Logging
 
-Used to log external API calls.
+Use HTTP logging to record external API calls.
 
-```javascript
+``` javascript
 LoggerLib.http({
   system: "SLACK",
   method: "GET",
@@ -133,13 +203,61 @@ LoggerLib.http({
 });
 ```
 
----
+Common uses:
+
+-   tracking API latency
+-   monitoring API errors
+-   auditing integrations
+-   debugging network calls
+
+------------------------------------------------------------------------
+
+# How Timestamps Work
+
+LoggerLib stores timestamps internally as **JavaScript `Date` objects**.
+
+When logs are written to Google Sheets:
+
+-   the value is stored as a **real datetime**
+-   Sheets controls how the date appears
+-   the column remains sortable and filterable
+
+Example display:
+
+    2/27/2026 13:37:56
+
+This is better than storing timestamps as ISO strings when using Google
+Sheets.
+
+------------------------------------------------------------------------
+
+# Initialization Options
+
+``` javascript
+LoggerLib.init({
+  spreadsheetId: "SHEET_ID",
+  operationalSheet: "Operational_Log",
+  networkSheet: "Network_Log",
+  level: "INFO"
+});
+```
+
+Options:
+
+  Option             Description
+  ------------------ ----------------------------
+  spreadsheetId      Target spreadsheet
+  operationalSheet   Sheet for operational logs
+  networkSheet       Sheet for network logs
+  level              Minimum log level emitted
+
+------------------------------------------------------------------------
 
 # Custom Headers
 
-Headers can be overridden when initializing.
+You can override the default headers.
 
-```javascript
+``` javascript
 LoggerLib.init({
   spreadsheetId: "SHEET_ID",
 
@@ -161,151 +279,148 @@ LoggerLib.init({
 });
 ```
 
-If no headers are provided, the library uses default schemas.
+If not provided, LoggerLib automatically creates default schemas.
 
----
+------------------------------------------------------------------------
 
 # Creating a Custom Logger Instance
 
-You can create separate loggers if needed.
+For advanced usage you can create independent loggers.
 
-```javascript
+``` javascript
 const logger = LoggerLib.create({
   spreadsheetId: "SHEET_ID"
 });
 
-logger.info({ message: "Custom logger started" });
+logger.info({
+  message: "Custom logger started"
+});
 ```
 
----
+Useful when:
+
+-   different modules use separate logs
+-   multiple spreadsheets are required
+-   different log levels are needed
+
+------------------------------------------------------------------------
 
 # Project Structure
 
-```
-src/
-│
-├── index.ts
-├── logger.ts
-├── sheets.ts
-├── types.ts
-```
+    src/
+    ├── index.ts
+    ├── logger.ts
+    ├── sheets.ts
+    ├── types.ts
 
-### `index.ts`
+### index.ts
 
-Public library API.
+Public API entry point.
 
 Handles:
 
-- initialization
-- singleton logger
-- convenience methods
+-   initialization
+-   singleton logger
+-   helper methods
 
----
+------------------------------------------------------------------------
 
-### `logger.ts`
+### logger.ts
 
 Core logging engine.
 
 Responsible for:
 
-- log record creation
-- pipelines
-- routing records to transports
+-   building log records
+-   applying log levels
+-   routing logs through transports
 
----
+------------------------------------------------------------------------
 
-### `sheets.ts`
+### sheets.ts
 
 Google Sheets transport implementation.
 
-Handles:
+Responsible for:
 
-- sheet creation
-- header initialization
-- row formatting
+-   creating sheets
+-   initializing headers
+-   writing rows
 
----
+------------------------------------------------------------------------
 
-### `types.ts`
+### types.ts
 
-Shared TypeScript types.
+Shared TypeScript types for:
 
-Defines:
+-   log record structures
+-   row types
+-   logger interfaces
+-   transport definitions
 
-- log record structures
-- logger interface
-- transport types
+------------------------------------------------------------------------
 
----
+# Logger Pipeline
 
-# Design
+LoggerLib follows a simple pipeline architecture:
 
-The logger uses a **pipeline architecture**:
-
-```
-LogRecord
-   ↓
-Formatter
-   ↓
-Transport
-   ↓
-Destination
-```
+    LogRecord
+       ↓
+    Row Formatter
+       ↓
+    Sheets Transport
+       ↓
+    Google Sheets
 
 Example:
 
-```
-LogRecord
-   ↓
-toOperationalRow()
-   ↓
-SheetsTransport
-   ↓
-Google Sheets
-```
+    BaseLogRecord
+       ↓
+    toOperationalRow()
+       ↓
+    SheetsTransport
+       ↓
+    Operational_Log
 
----
-
-# Future Features
-
-Planned improvements:
-
-- Console transport
-- JSON export transport
-- Google Drive file transport
-- Batched sheet writes (high performance)
-- UrlFetchApp wrapper (`fetchWithLogger`)
-- Structured API endpoint registry
-
----
+------------------------------------------------------------------------
 
 # Example Sheet Layout
 
-### Operational_Log
+## Operational_Log
 
-```
-ts | logId | level | system | action | target | outcome | message | metaJson
-```
+    ts | logId | level | message | metaJson
 
-### Network_Log
+## Network_Log
 
-```
-ts | logId | level | system | method | endpoint | url | status | durationMs | requestBytes | responseBytes | queryJson | metaJson | errorMessage
-```
+    ts | logId | level | system | method | endpoint | url | status | durationMs | requestBytes | responseBytes | queryJson | metaJson | errorMessage
 
----
+------------------------------------------------------------------------
+
+# Planned Features
+
+Future improvements may include:
+
+-   console transport
+-   JSON export transport
+-   Google Drive log files
+-   batched sheet writes
+-   UrlFetchApp wrapper (`fetchWithLogger`)
+-   structured endpoint registry
+
+------------------------------------------------------------------------
 
 # License
 
 MIT
 
----
+------------------------------------------------------------------------
 
 # Why This Library Exists
 
-Google Apps Script lacks a structured logging system similar to:
+Google Apps Script lacks a robust structured logging system similar to:
 
-- **Winston** (Node.js logging)
-- **Morgan** (HTTP request logging)
+-   **Winston** (Node.js logging)
+-   **Morgan** (HTTP request logging)
 
-This library fills that gap while staying **native to GAS + Google Sheets**.
+LoggerLib provides a **GAS-native structured logging solution** built on
+top of **Google Sheets**.

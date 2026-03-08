@@ -5,12 +5,15 @@
   "main": "dist/logger.js",
   "types": "dist/types.d.ts",
   "type": "module",
-  "scripts": {
-    "build": "tsx esbuild.config.ts",
-    "copy": "node scripts/copy-manifest.mjs",
-    "push": "npm run build && npm run copy && clasp push",
-    "open": "clasp open-script"
-  },
+"scripts": {
+  "build": "tsx esbuild.config.ts",
+  "copy": "node scripts/copy-manifest.mjs",
+  "push": "npm run build && npm run copy && clasp push",
+  "version:create": "clasp version \"release\"",
+  "deploy": "npm run push && clasp deploy",
+  "release": "npm run push && clasp version \"release\"",
+  "open": "clasp open-script"
+},
   "devDependencies": {
     "@types/google-apps-script": "^2.0.8",
     "@types/node": "^25.3.3",
