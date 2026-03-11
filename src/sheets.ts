@@ -21,12 +21,6 @@ import type { OperationalLogRecord, NetworkLogRecord, Transport } from "./types"
 
 /**
  * Default header schema for the operational log sheet.
- *
- * Intended for internal application/workflow events such as:
- * - sync started
- * - sync completed
- * - validation warnings
- * - task failures
  */
 const DEFAULT_OPERATIONAL_HEADERS = [
   "ts",
@@ -34,20 +28,16 @@ const DEFAULT_OPERATIONAL_HEADERS = [
   "correlationId",
   "parentLogId",
   "level",
+  "system",
+  "action",
+  "target",
+  "outcome",
   "message",
   "metaJson",
 ];
 
 /**
  * Default header schema for the network log sheet.
- *
- * Intended for structured HTTP/API request logs such as:
- * - method
- * - endpoint
- * - response status
- * - duration
- * - payload size
- * - error message
  */
 const DEFAULT_NETWORK_HEADERS = [
   "ts",
@@ -70,26 +60,11 @@ const DEFAULT_NETWORK_HEADERS = [
 
 /**
  * A row payload that can be safely written to Google Sheets.
- *
- * Includes Date so timestamps can be stored as real spreadsheet date values.
  */
 type Row = (string | number | boolean | null | Date)[];
 
 /**
  * Get or create a sheet inside the target spreadsheet.
- *
- * Behavior:
- * - opens the spreadsheet by ID
- * - creates the sheet if it does not already exist
- * - writes header row if the sheet is new or empty
- *
- * This ensures logger transports can append rows safely without needing
- * separate setup code in consumer scripts.
- *
- * @param spreadsheetId Target spreadsheet ID.
- * @param name Sheet name to read or create.
- * @param headers Header row to initialize if the sheet is new or empty.
- * @returns The target Google Sheets sheet.
  */
 function getSheet(
   spreadsheetId: string,
@@ -102,8 +77,8 @@ function getSheet(
   const isNew = !sheet;
   if (!sheet) sheet = ss.insertSheet(name);
 
-  // Initialize headers once (new sheet OR empty sheet)
   const isEmpty = sheet.getLastRow() === 0;
+
   if ((isNew || isEmpty) && headers?.length) {
     sheet.appendRow(headers);
   }
@@ -113,34 +88,34 @@ function getSheet(
 
 /**
  * Safely serialize a value to JSON for storage in a spreadsheet cell.
- *
- * Used for fields such as:
- * - meta
- * - query parameters
- * - fallback structured data
- *
- * If serialization fails, a fallback JSON object is returned containing
- * the serialization error message.
- *
- * @param value Value to serialize.
- * @returns JSON string safe for writing into a single sheet cell.
  */
 function safeJson(value: unknown): string {
   try {
-    return JSON.stringify(value ?? {});
+    return JSON.stringify(value ?? null);
   } catch (e) {
     return JSON.stringify({ stringifyError: String(e) });
   }
 }
 
 /**
+ * Ensure rows match header length.
+ */
+function assertRowsMatchHeaders(
+  rows: Row[],
+  headers: string[],
+  context: string
+): void {
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].length !== headers.length) {
+      throw new Error(
+        `${context}: row ${i + 1} has length ${rows[i].length}, but headers have length ${headers.length}`
+      );
+    }
+  }
+}
+
+/**
  * Convert an operational log record into a spreadsheet row.
- *
- * The resulting row order must match `DEFAULT_OPERATIONAL_HEADERS`
- * unless a consumer intentionally overrides the schema.
- *
- * @param record Structured operational log record.
- * @returns Google Sheets row payload for the operational sheet.
  */
 function toOperationalRow(record: OperationalLogRecord): Row {
   return [
@@ -149,6 +124,10 @@ function toOperationalRow(record: OperationalLogRecord): Row {
     record.correlationId ?? "",
     record.parentLogId ?? "",
     record.level,
+    record.system ?? "",
+    record.action ?? "",
+    record.target ?? "",
+    record.outcome ?? "",
     record.message,
     safeJson(record.meta),
   ];
@@ -156,17 +135,6 @@ function toOperationalRow(record: OperationalLogRecord): Row {
 
 /**
  * Convert a network log record into a spreadsheet row.
- *
- * The resulting row order must match `DEFAULT_NETWORK_HEADERS`
- * unless a consumer intentionally overrides the schema.
- *
- * Notes:
- * - `queryJson` is derived from `record.url.parts?.query`
- * - nullable numeric fields remain nullable
- * - missing strings are normalized to empty strings
- *
- * @param record Structured network log record.
- * @returns Google Sheets row payload for the network sheet.
  */
 function toNetworkRow(record: NetworkLogRecord): Row {
   return [
@@ -183,40 +151,55 @@ function toNetworkRow(record: NetworkLogRecord): Row {
     record.durationMs,
     record.requestBytes ?? null,
     record.responseBytes ?? null,
-    safeJson(record.url.parts?.query ?? {}),
+    safeJson(record.url.parts?.query ?? null),
     safeJson(record.meta),
     record.error?.message ?? "",
   ];
 }
 
 /**
- * Create a Google Sheets row transport.
+ * Create a Google Sheets row transport with buffering.
  *
- * This transport is used by logger pipelines to append formatted row payloads
- * to a destination sheet.
- *
- * Behavior:
- * - resolves the sheet lazily on write
- * - ensures the sheet exists
- * - ensures headers are initialized
- * - appends the provided row payload
- *
- * @param spreadsheetId Target spreadsheet ID.
- * @param sheetName Destination sheet name.
- * @param headers Header row used when the destination sheet is created or empty.
- * @returns A transport that writes rows into Google Sheets.
+ * Rows are buffered and written in bulk using `setValues()` for performance.
  */
 function makeSheetsRowTransport(
   spreadsheetId: string,
   sheetName: string,
   headers: string[] = []
 ): Transport<Row> {
+  const buffer: Row[] = [];
+  let sheetCache: GoogleAppsScript.Spreadsheet.Sheet | null = null;
+
+  function getCachedSheet(): GoogleAppsScript.Spreadsheet.Sheet {
+    if (!sheetCache) {
+      sheetCache = getSheet(spreadsheetId, sheetName, headers);
+    }
+    return sheetCache;
+  }
+
+  function flush(): void {
+   if (buffer.length >= 100) flush();
+
+    assertRowsMatchHeaders(buffer, headers, `Sheet transport "${sheetName}"`);
+
+    const sheet = getCachedSheet();
+    const startRow = sheet.getLastRow() + 1;
+
+    sheet
+      .getRange(startRow, 1, buffer.length, headers.length)
+      .setValues(buffer);
+
+    buffer.length = 0;
+  }
+
   return {
     name: "sheets",
+
     write: (row: Row) => {
-      const sheet = getSheet(spreadsheetId, sheetName, headers);
-      sheet.appendRow(row);
+      buffer.push(row);
     },
+
+    flush,
   };
 }
 

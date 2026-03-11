@@ -2,16 +2,16 @@
 
 import type {
   LogId,
-  Ts,
   LogLevel,
   LogInput,
   LogRecord,
   OperationalLogRecord,
   NetworkLogRecord,
-  Logger,
   LoggerConfig,
   BaseLogRecord,
-  CorrelationId
+  CorrelationId,
+  Logger,
+  Ts
 } from "./types";
 
 /**
@@ -43,7 +43,11 @@ function newLogId(): LogId {
     Utilities.DigestAlgorithm.SHA_256,
     `${Date.now()}-${Math.random()}`
   );
-  return bytes.slice(0, 5).map(b => (b & 0xff).toString(16).padStart(2, "0")).join("");
+
+  return bytes
+    .slice(0, 5)
+    .map((b) => (b & 0xff).toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**
@@ -153,6 +157,20 @@ function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logge
   }
 
   /**
+   * Flush any buffered transports used by the configured pipelines.
+   *
+   * Transports that do not buffer writes may omit `flush()`.
+   * This method safely calls `flush()` only when it exists.
+   */
+  function flush(): void {
+    for (const p of config.pipelines) {
+      if (typeof p.transport.flush === "function") {
+        p.transport.flush();
+      }
+    }
+  }
+
+  /**
    * Build the common/base fields shared by all emitted records.
    *
    * This is used primarily by operational logs, but the same field model
@@ -194,10 +212,14 @@ function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logge
    * @param input Caller-provided operational log input.
    * @returns The emitted operational log record.
    */
-  function log(level: LogLevel, input: LogInput): LogRecord {
+  function log(level: LogLevel, input: LogInput): OperationalLogRecord {
     const record: OperationalLogRecord = {
       kind: "operational",
       ...base(level, input),
+      system: input.system,
+      action: input.action,
+      target: input.target,
+      outcome: input.outcome,
     };
 
     emit(record);
@@ -273,21 +295,12 @@ function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logge
   return {
     log,
 
-    /** Create and emit an operational DEBUG record. */
     debug: (input) => log("DEBUG", input),
 
-    /** Create and emit an operational INFO record. */
     info: (input) => log("INFO", input),
 
-    /** Create and emit an operational WARN record. */
     warn: (input) => log("WARN", input),
 
-    /**
-     * Create and emit an operational ERROR record.
-     *
-     * If the caller provides a raw `error`, its message is appended
-     * to the provided log message.
-     */
     error: (input) => {
       if ("error" in input) {
         const msg =
@@ -296,6 +309,7 @@ function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logge
             : String(input.error);
 
         return log("ERROR", {
+          ...input,
           message: `${input.message}: ${msg}`,
           meta: input.meta,
         });
@@ -305,6 +319,7 @@ function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logge
     },
 
     http,
+    flush,
   };
 }
 

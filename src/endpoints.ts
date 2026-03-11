@@ -28,25 +28,59 @@ import { ApiSystem, HttpMethod } from "./types";
  * - Keeps endpoint metadata separate from logger logic
  */
 
+/**
+ * Determine which API system a URL belongs to.
+ */
 function inferSystemFromUrl(url: string): ApiSystem {
-  const host = new URL(url).hostname;
-  if(host.includes("slack.com")) return "SLACK";
-  if(host.includes("notion.com")) return "NOTION";
-  if(host.includes("googleapis.com")) return "GOOGLE";
-  return "OTHER";
+  try {
+    const host = new URL(url).hostname;
+
+    if (host.includes("slack.com")) return "SLACK";
+    if (host.includes("notion.com")) return "NOTION";
+    if (host.includes("googleapis.com")) return "GOOGLE";
+
+    return "OTHER";
+  } catch {
+    return "OTHER";
+  }
 }
 
+/**
+ * Allowed HTTP methods.
+ */
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
+/**
+ * Normalize arbitrary HTTP method strings.
+ *
+ * Ensures the result is a valid `HttpMethod`.
+ */
 function normalizeMethod(method?: string): HttpMethod {
   const m = (method ?? "GET").toUpperCase();
-  return HTTP_METHODS.includes(m as HttpMethod) ? (m as HttpMethod) : "GET";
+
+  return HTTP_METHODS.includes(m as HttpMethod)
+    ? (m as HttpMethod)
+    : "GET";
 }
 
+/**
+ * Combined endpoint registry.
+ */
 const ENDPOINTS = {
   ...SLACK_ENDPOINTS,
   ...NOTION_ENDPOINTS,
   ...GOOGLE_ENDPOINTS,
 } as const;
-export { ENDPOINTS, inferSystemFromUrl, normalizeMethod }
-export type EndpointKey = keyof typeof ENDPOINTS;
+
+/**
+ * Type-safe endpoint identifier.
+ */
+type EndpointKey = keyof typeof ENDPOINTS;
+
+export {
+  ENDPOINTS,
+  inferSystemFromUrl,
+  normalizeMethod,
+};
+
+export type { EndpointKey };
