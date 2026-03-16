@@ -69,8 +69,16 @@ function buildLogger(config: InitConfig): Logger {
   const opHeaders = config.operationalHeaders ?? DEFAULT_OPERATIONAL_HEADERS;
   const netHeaders = config.networkHeaders ?? DEFAULT_NETWORK_HEADERS;
 
-  const opTransport = makeSheetsRowTransport(config.spreadsheetId, opName, opHeaders);
-  const netTransport = makeSheetsRowTransport(config.spreadsheetId, netName, netHeaders);
+  const opTransport = makeSheetsRowTransport(
+    config.spreadsheetId,
+    opName,
+    opHeaders
+  );
+  const netTransport = makeSheetsRowTransport(
+    config.spreadsheetId,
+    netName,
+    netHeaders
+  );
 
   return createLogger<Row>({
     level,
@@ -78,12 +86,12 @@ function buildLogger(config: InitConfig): Logger {
       {
         filter: (r: LogRecord) => r.kind === "operational",
         format: (r: LogRecord) => toOperationalRow(r as OperationalLogRecord),
-        transport: { name: "sheets", write: (row: Row) => opTransport.write(row) },
+        transport: opTransport,
       },
       {
         filter: (r: LogRecord) => r.kind === "network",
         format: (r: LogRecord) => toNetworkRow(r as NetworkLogRecord),
-        transport: { name: "sheets", write: (row: Row) => netTransport.write(row) },
+        transport: netTransport,
       },
     ],
   });
@@ -167,6 +175,11 @@ function create(config: InitConfig) {
      * @param input Structured HTTP/network log input.
      */
     http: (input: Parameters<Logger["http"]>[0]) => logger.http(input),
+
+    /**
+     * Flush any buffered transports associated with this logger instance.
+     */
+    flush: () => logger.flush(),
   };
 }
 
@@ -180,7 +193,12 @@ function create(config: InitConfig) {
  * @throws Error if LoggerLib has not been initialized.
  */
 function log(input: LogInput) {
-  if (!singleton) throw new Error("LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first.");
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
   return singleton.info(input);
 }
 
@@ -192,7 +210,12 @@ function log(input: LogInput) {
  * @throws Error if LoggerLib has not been initialized.
  */
 function http(input: Parameters<Logger["http"]>[0]) {
-  if (!singleton) throw new Error("LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first.");
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
   return singleton.http(input);
 }
 
@@ -204,7 +227,12 @@ function http(input: Parameters<Logger["http"]>[0]) {
  * @throws Error if LoggerLib has not been initialized.
  */
 function debug(input: LogInput) {
-  if (!singleton) throw new Error("LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first.");
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
   return singleton.debug(input);
 }
 
@@ -216,7 +244,12 @@ function debug(input: LogInput) {
  * @throws Error if LoggerLib has not been initialized.
  */
 function info(input: LogInput) {
-  if (!singleton) throw new Error("LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first.");
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
   return singleton.info(input);
 }
 
@@ -228,7 +261,12 @@ function info(input: LogInput) {
  * @throws Error if LoggerLib has not been initialized.
  */
 function warn(input: LogInput) {
-  if (!singleton) throw new Error("LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first.");
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
   return singleton.warn(input);
 }
 
@@ -240,8 +278,28 @@ function warn(input: LogInput) {
  * @throws Error if LoggerLib has not been initialized.
  */
 function error(input: Parameters<Logger["error"]>[0]) {
-  if (!singleton) throw new Error("LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first.");
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
   return singleton.error(input);
+}
+
+/**
+ * Flush buffered writes on the initialized singleton logger.
+ *
+ * @throws Error if LoggerLib has not been initialized.
+ */
+function flush(): void {
+  if (!singleton) {
+    throw new Error(
+      "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
+    );
+  }
+
+  singleton.flush();
 }
 
 /**
@@ -255,8 +313,19 @@ function error(input: Parameters<Logger["error"]>[0]) {
 (globalThis as any).warn = warn;
 (globalThis as any).error = error;
 (globalThis as any).http = http;
+(globalThis as any).flush = flush;
 
 /**
  * Namespaced convenience object for library consumers.
  */
-(globalThis as any).LoggerLib = { init, create, log, debug, info, warn, error, http };
+(globalThis as any).LoggerLib = {
+  init,
+  create,
+  log,
+  debug,
+  info,
+  warn,
+  error,
+  http,
+  flush,
+};

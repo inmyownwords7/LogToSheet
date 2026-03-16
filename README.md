@@ -1,267 +1,112 @@
 
 # LoggerLib
 
-A **structured logging library for Google Apps Script** that writes operational and HTTP/network logs into **Google Sheets**.
+A structured logging library for **Google Apps Script** with support for:
 
-LoggerLib brings a **Winston-style logging architecture** to the GAS ecosystem while staying lightweight and native to Apps Script.
+- Operational logs (workflow events)
+- Network/API logs (HTTP requests)
+- Pipeline-based output
+- Buffered Google Sheets transport
+- Correlation IDs for tracing executions
 
----
-
-# Overview
-
-LoggerLib separates logging into **three layers**:
-
-Caller Code → Logger → Pipelines → Formatter → Transport → Google Sheets
-
-This architecture allows logs to be:
-
-- filtered
-- formatted
-- routed to multiple destinations
-
----
-
-# Log Types
-
-LoggerLib emits two types of records.
-
-## Operational Logs
-
-Operational logs represent **internal application events** such as:
-
-- workflow execution
-- sync tasks
-- validation results
-- background operations
-
-Example:
-
-| ts | logId | correlationId | parentLogId | level | message | metaJson |
-|----|------|------|------|------|------|------|
-| 2026‑03‑04 17:10:25 | a8f3d21 | 43d1... | | INFO | Slack user sync completed | {"count":24} |
-
----
-
-## Network Logs
-
-Network logs represent **HTTP/API requests**.
-
-Example:
-
-| ts | logId | correlationId | parentLogId | level | system | method | endpoint | url | status | durationMs |
-|----|------|------|------|------|------|------|------|------|------|------|
-| 2026‑03‑04 17:10:30 | b1f2a31 | 43d1... | a8f3d21 | INFO | NOTION | POST | queryDatabase | https://api.notion.com/... | 200 | 312 |
+LoggerLib is designed to make **Apps Script automation observable**, especially when working with APIs such as **Slack, Notion, and Google APIs**.
 
 ---
 
 # Features
 
-- Structured logs
-- Correlation IDs for workflow tracing
-- Parent/child log relationships
+- Structured logging
+- Operational + Network log separation
 - Pipeline-based architecture
-- Google Sheets transport
-- HTTP request logging
-- TypeScript-first design
-- Works as a GAS Library
+- Buffered sheet writes (`setValues()` batching)
+- Automatic correlation IDs
+- Flexible metadata (`meta`)
+- Safe JSON serialization
+- Endpoint registry support
+- Multiple logger instances or singleton usage
 
 ---
 
-# Installation
+# Architecture
 
-## Option 1 — Google Apps Script Library
+LoggerLib is organized into layered modules:
 
-1. Open your Apps Script project
-2. Go to **Extensions → Apps Script → Libraries**
-3. Add the Script ID of this library
-4. Set the identifier to:
+```
+types.ts
+  └── Shared contracts and types
 
-LoggerLib
+logger.ts
+  └── Core logging engine
+      - record creation
+      - severity filtering
+      - pipeline routing
 
----
+sheets.ts
+  └── Google Sheets transport
+      - row formatting
+      - buffered writes
+      - header initialization
 
-# Basic Usage
+endpoint-registry.ts
+  └── API classification helpers
+      - Slack
+      - Notion
+      - Google
 
-Initialize once per execution.
-
-```javascript
-function initLogger() {
-  LoggerLib.init({
-    spreadsheetId: "YOUR_SPREADSHEET_ID",
-    operationalSheet: "Operational_Log",
-    networkSheet: "Network_Log",
-    level: "INFO"
-  });
-}
+index.ts
+  └── Public library API
+      - GAS global exports
+      - singleton helpers
 ```
 
 ---
 
-# Writing Logs
+# Log Types
 
-## Operational Log
+LoggerLib supports two log categories.
 
-```javascript
-LoggerLib.info({
-  message: "Identity sync started",
-  meta: { source: "identityBuild" }
-});
+## Operational Logs
+
+Used for application workflow events.
+
+Examples:
+
+- sync started
+- validation failed
+- cache refreshed
+- task skipped
+
+Fields:
+
 ```
-
-## Debug Log
-
-```javascript
-LoggerLib.debug({
-  message: "Fetched Slack users",
-  meta: { count: users.length }
-});
-```
-
-## Error Log
-
-```javascript
-LoggerLib.error({
-  message: "Slack API failed",
-  error: err
-});
-```
-
----
-
-# HTTP / Network Logging
-
-```javascript
-LoggerLib.http({
-  system: "SLACK",
-  method: "GET",
-  url: { raw: "https://slack.com/api/users.list" },
-  status: 200,
-  durationMs: 180
-});
-```
-
----
-
-# Correlation IDs
-
-Correlation IDs link logs belonging to the **same workflow or execution**.
-
-```javascript
-const correlationId = Utilities.getUuid();
-
-LoggerLib.info({
-  correlationId,
-  message: "Sync started"
-});
-
-LoggerLib.http({
-  correlationId,
-  system: "NOTION",
-  method: "POST",
-  url: { raw: "https://api.notion.com/v1/databases/query" },
-  status: 200,
-  durationMs: 240
-});
-```
-
----
-
-# Parent Log Relationships
-
-```javascript
-const main = LoggerLib.info({
-  message: "Sync started"
-});
-
-LoggerLib.http({
-  parentLogId: main.logId,
-  system: "SLACK",
-  method: "GET",
-  url: { raw: "https://slack.com/api/users.list" },
-  status: 200,
-  durationMs: 180
-});
-```
-
----
-
-# Project Structure
-
-src/
-│
-├── index.ts
-├── logger.ts
-├── sheets.ts
-└── types.ts
-
----
-
-## types.ts
-
-Defines:
-
-- log record structures
-- pipeline contracts
-- transport interfaces
-- logger interface
-
----
-
-## logger.ts
-
-Core logging engine.
-
-Responsibilities:
-
-- generate timestamps
-- generate log IDs
-- apply severity filtering
-- create operational and network records
-- emit records through pipelines
-
----
-
-## sheets.ts
-
-Google Sheets output layer.
-
-Responsibilities:
-
-- convert records to rows
-- ensure sheets exist
-- initialize headers
-- append rows
-
----
-
-## index.ts
-
-Public library entry point.
-
-Responsibilities:
-
-- configure pipelines
-- initialize singleton logger
-- expose LoggerLib API
-
----
-
-# Example Sheet Layout
-
-## Operational_Log
-
 ts
 logId
 correlationId
 parentLogId
 level
+system
+action
+target
+outcome
 message
 metaJson
+```
 
 ---
 
-## Network_Log
+## Network Logs
 
+Used for HTTP/API request events.
+
+Examples:
+
+- Slack API calls
+- Notion database queries
+- Google API requests
+
+Fields:
+
+```
 ts
 logId
 correlationId
@@ -278,6 +123,210 @@ responseBytes
 queryJson
 metaJson
 errorMessage
+```
+
+---
+
+# Installation (Apps Script Library)
+
+1. Compile your project with **esbuild**
+
+```
+src/
+dist/Code.gs
+```
+
+Example build:
+
+```javascript
+esbuild.build({
+  entryPoints: ["src/index.ts"],
+  bundle: true,
+  outfile: "dist/Code.gs",
+  format: "iife",
+  target: "es2019",
+});
+```
+
+2. Deploy the script as a **Google Apps Script library**
+
+3. Add the library to your GAS project.
+
+---
+
+# Basic Usage
+
+Initialize the logger once per execution.
+
+```javascript
+function example() {
+
+  LoggerLib.init({
+    spreadsheetId: "YOUR_SPREADSHEET_ID"
+  });
+
+  LoggerLib.info({
+    message: "Workflow started"
+  });
+
+  LoggerLib.warn({
+    message: "Unexpected value",
+    meta: { value: 42 }
+  });
+
+  LoggerLib.flush();
+}
+```
+
+---
+
+# Network Logging
+
+Use `http()` to log API calls.
+
+```javascript
+LoggerLib.http({
+  system: "NOTION",
+  method: "POST",
+  url: { raw: "https://api.notion.com/v1/databases/query" },
+  status: 200,
+  durationMs: 520
+});
+```
+
+---
+
+# Correlation IDs
+
+Each logger instance receives a default correlation ID.
+
+This allows multiple logs during a workflow execution to be linked together.
+
+Example flow:
+
+```
+syncUsers started
+   └─ fetch users
+   └─ update database
+   └─ sync completed
+```
+
+All logs share the same correlation ID.
+
+---
+
+# Flushing Logs
+
+Sheets writes are buffered for performance.
+
+Always flush at the end of a workflow.
+
+```javascript
+try {
+
+  LoggerLib.info({
+    message: "sync started"
+  });
+
+  // workflow logic
+
+} finally {
+
+  LoggerLib.flush();
+
+}
+```
+
+---
+
+# Creating Independent Logger Instances
+
+You can create separate logger instances if needed.
+
+```javascript
+const logger = LoggerLib.create({
+  spreadsheetId: "SHEET_ID"
+});
+
+logger.info({
+  message: "Independent logger"
+});
+
+logger.flush();
+```
+
+---
+
+# Pipeline Design
+
+LoggerLib uses a **pipeline architecture**.
+
+```
+LogRecord
+   ↓
+filter()
+   ↓
+format()
+   ↓
+transport.write()
+```
+
+This allows future extensions such as:
+
+- console transports
+- file transports
+- BigQuery transports
+- Slack alert pipelines
+
+---
+
+# Example Sheets Output
+
+## Operational_Log
+
+| ts | logId | level | message |
+|---|---|---|---|
+| 2026-03-12 | a13f9 | INFO | sync started |
+
+## Network_Log
+
+| ts | system | method | status |
+|---|---|---|---|
+| 2026-03-12 | NOTION | POST | 200 |
+
+---
+
+# Performance
+
+LoggerLib uses **buffered sheet writes**.
+
+Instead of:
+
+```
+appendRow() per log
+```
+
+it performs:
+
+```
+setValues() batch writes
+```
+
+This dramatically improves performance for large workflows.
+
+---
+
+# Future Extensions
+
+Potential future additions:
+
+- automatic endpoint detection
+- retry logging
+- execution timing helpers
+- alert pipelines
+- structured error capture
+- log sampling
+- distributed tracing support
 
 ---
 
