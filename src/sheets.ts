@@ -1,6 +1,7 @@
 // src/sheets.ts
 
-import type { OperationalLogRecord, NetworkLogRecord, Transport } from "./types";
+import type { OperationalLogRecord, NetworkLogRecord } from "./types";
+import type { Transport } from "./internal-types";
 
 /**
  * Responsibility: Convert structured log records into Google Sheets rows
@@ -168,7 +169,11 @@ function makeSheetsRowTransport(
   headers: string[] = []
 ): Transport<Row> {
   const buffer: Row[] = [];
-  let sheetCache: GoogleAppsScript.Spreadsheet.Sheet | null = null;
+  let sheetCache: GoogleAppsScript.Spreadsheet.Sheet | null = getSheet(
+    spreadsheetId,
+    sheetName,
+    headers
+  );
 
   function getCachedSheet(): GoogleAppsScript.Spreadsheet.Sheet {
     if (!sheetCache) {
@@ -178,7 +183,7 @@ function makeSheetsRowTransport(
   }
 
   function flush(): void {
-   if (buffer.length >= 100) flush();
+    if (buffer.length === 0) return;
 
     assertRowsMatchHeaders(buffer, headers, `Sheet transport "${sheetName}"`);
 

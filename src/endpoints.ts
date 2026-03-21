@@ -1,7 +1,7 @@
 import { SLACK_ENDPOINTS } from "./slack-endpoints";
 import { NOTION_ENDPOINTS } from "./notion-endpoints";
 import { GOOGLE_ENDPOINTS } from "./google-endpoints";
-import { ApiSystem, HttpMethod } from "./types";
+import type { ApiSystem, HttpMethod } from "./types";
 
 /**
  * Responsibility: Endpoint registry + request inference helpers.

@@ -1,18 +1,20 @@
 // src/logger.ts
 
 import type {
-  LogId,
-  LogLevel,
-  LogInput,
-  LogRecord,
-  OperationalLogRecord,
-  NetworkLogRecord,
-  LoggerConfig,
   BaseLogRecord,
   CorrelationId,
-  Logger,
-  Ts
+  LogId,
+  LogInput,
+  LogLevel,
+  NetworkLogRecord,
+  OperationalLogRecord,
+  Ts,
 } from "./types";
+import type {
+  InternalLogger,
+  LoggerConfig,
+  LogRecord,
+} from "./internal-types";
 
 /**
  * Responsibility: Build structured log records and emit them through configured pipelines.
@@ -111,6 +113,37 @@ function normalizeMeta(meta: unknown): Record<string, unknown> {
 }
 
 /**
+ * Write an accepted record to the runtime console.
+ *
+ * Console output is enabled by default so callers get immediate visibility
+ * during execution in addition to any configured transports.
+ *
+ * @param record Structured log record to print.
+ */
+function writeToConsole(record: LogRecord): void {
+  const consoleApi = globalThis.console;
+  if (!consoleApi) return;
+
+  const prefix = `[${record.level}] ${record.kind}`;
+  const line = `${prefix} ${record.message}`;
+
+  switch (record.level) {
+    case "DEBUG":
+      (consoleApi.debug ?? consoleApi.log).call(consoleApi, line, record);
+      return;
+    case "INFO":
+      (consoleApi.info ?? consoleApi.log).call(consoleApi, line, record);
+      return;
+    case "WARN":
+      (consoleApi.warn ?? consoleApi.log).call(consoleApi, line, record);
+      return;
+    case "ERROR":
+      (consoleApi.error ?? consoleApi.log).call(consoleApi, line, record);
+      return;
+  }
+}
+
+/**
  * Create a logger instance with a fixed global level threshold and one or more pipelines.
  *
  * Each logger instance automatically receives a default `correlationId`.
@@ -125,7 +158,7 @@ function normalizeMeta(meta: unknown): Record<string, unknown> {
  * @param config Internal logger configuration.
  * @returns A logger instance implementing the Logger contract.
  */
-function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logger {
+function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): InternalLogger {
   /**
    * Default workflow-level correlation ID for this logger instance.
    *
@@ -148,6 +181,7 @@ function createLogger<TPayload = unknown>(config: LoggerConfig<TPayload>): Logge
    */
   function emit(record: LogRecord): void {
     if (!shouldEmit(config.level, record.level)) return;
+    if (config.console !== false) writeToConsole(record);
 
     for (const p of config.pipelines) {
       if (!p.filter(record)) continue;

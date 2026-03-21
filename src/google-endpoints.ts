@@ -10,7 +10,7 @@
  *
  * These definitions enable structured logging of Google API requests.
  */
-import { EndpointSpec } from "./types";
+import type { EndpointSpec } from "./types";
 
 const GOOGLE_ENDPOINTS: Record<string, EndpointSpec> = {
   "google.calendar.calendars.insert": {

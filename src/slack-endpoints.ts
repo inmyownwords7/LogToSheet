@@ -11,7 +11,7 @@
  * These definitions support structured HTTP logging.
  */
 
-import { EndpointSpec } from "./types";
+import type { EndpointSpec } from "./types";
 
 const SLACK_ENDPOINTS: Record<string, EndpointSpec> = {
   "slack.users.info": {

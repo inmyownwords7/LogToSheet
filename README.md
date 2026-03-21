@@ -33,7 +33,17 @@ LoggerLib is organized into layered modules:
 
 ```
 types.ts
-  └── Shared contracts and types
+  └── Public contracts
+      - log input and record shapes
+      - endpoint specs
+      - init config
+      - public logger instance
+
+internal-types.ts
+  └── Internal contracts
+      - pipelines
+      - transports
+      - internal logger engine types
 
 logger.ts
   └── Core logging engine
@@ -41,22 +51,26 @@ logger.ts
       - severity filtering
       - pipeline routing
 
+endpoints.ts
+  └── Endpoint registry helpers
+      - combined registry
+      - system inference
+      - method normalization
+
+slack-endpoints.ts / notion-endpoints.ts / google-endpoints.ts
+  └── Per-service endpoint definitions
+
 sheets.ts
   └── Google Sheets transport
       - row formatting
       - buffered writes
       - header initialization
 
-endpoint-registry.ts
-  └── API classification helpers
-      - Slack
-      - Notion
-      - Google
-
 index.ts
   └── Public library API
       - GAS global exports
       - singleton helpers
+      - LoggerLib namespace
 ```
 
 ---
@@ -129,12 +143,15 @@ errorMessage
 
 # Installation (Apps Script Library)
 
-1. Compile your project with **esbuild**
+1. Build the library project so it produces `dist/Code.gs`.
 
-```
-src/
-dist/Code.gs
-```
+2. Deploy that Apps Script project as a library.
+
+3. In the consumer Apps Script project, add the deployed library and use its chosen identifier.
+
+4. Create or choose a Google Spreadsheet where logs should be written, then copy its spreadsheet ID.
+
+5. Initialize the library once per execution with that spreadsheet ID before calling any log methods.
 
 Example build:
 
@@ -148,33 +165,82 @@ esbuild.build({
 });
 ```
 
-2. Deploy the script as a **Google Apps Script library**
+---
 
-3. Add the library to your GAS project.
+# Consumer Quick Start
+
+From a consumer script, the normal flow is:
+
+1. Add the library to the Apps Script project.
+2. Call `LoggerLib.init({ spreadsheetId })` once near the start of the execution.
+3. Call `LoggerLib.info()`, `warn()`, `error()`, or `http()` during the workflow.
+4. Call `LoggerLib.flush()` in a `finally` block before the execution ends.
+
+Example:
+
+```javascript
+function example() {
+  LoggerLib.init({
+    spreadsheetId: "YOUR_SPREADSHEET_ID"
+  });
+
+  try {
+    LoggerLib.info({
+      message: "Workflow started"
+    });
+
+    LoggerLib.warn({
+      message: "Unexpected value",
+      meta: { value: 42 }
+    });
+  } finally {
+    LoggerLib.flush();
+  }
+}
+```
+
+---
+
+# What Happens On Init
+
+When `LoggerLib.init()` or `LoggerLib.create()` runs:
+
+- the logger instance is created
+- the target sheets are created if they do not already exist
+- headers are added if the sheets are new or empty
+- console logging is enabled by default unless `console: false` is passed
+
+By default, the library uses these sheet names:
+
+- `Operational_Log`
+- `Network_Log`
+
+You can override them with `operationalSheet` and `networkSheet`.
 
 ---
 
 # Basic Usage
 
-Initialize the logger once per execution.
+Initialize the logger once per execution, then flush before the script ends.
 
 ```javascript
 function example() {
-
   LoggerLib.init({
     spreadsheetId: "YOUR_SPREADSHEET_ID"
   });
 
-  LoggerLib.info({
-    message: "Workflow started"
-  });
+  try {
+    LoggerLib.info({
+      message: "Workflow started"
+    });
 
-  LoggerLib.warn({
-    message: "Unexpected value",
-    meta: { value: 42 }
-  });
-
-  LoggerLib.flush();
+    LoggerLib.warn({
+      message: "Unexpected value",
+      meta: { value: 42 }
+    });
+  } finally {
+    LoggerLib.flush();
+  }
 }
 ```
 
@@ -219,21 +285,27 @@ All logs share the same correlation ID.
 
 Sheets writes are buffered for performance.
 
+`flush()` writes buffered log rows to the spreadsheet.
+
+It is still required even though sheet creation now happens automatically during
+`init()` / `create()`.
+
+In other words:
+
+- sheet creation and header setup happen automatically
+- row writes happen on `flush()`
+
 Always flush at the end of a workflow.
 
 ```javascript
 try {
-
   LoggerLib.info({
     message: "sync started"
   });
 
   // workflow logic
-
 } finally {
-
   LoggerLib.flush();
-
 }
 ```
 
@@ -257,9 +329,44 @@ logger.flush();
 
 ---
 
+# Endpoint Helpers
+
+Endpoint helpers are exposed under the `LoggerLib` namespace.
+
+They are not published as standalone Apps Script globals.
+
+```javascript
+const system = LoggerLib.inferSystemFromUrl("https://api.notion.com/v1/pages/123");
+const method = LoggerLib.normalizeMethod("post");
+const endpoint = LoggerLib.ENDPOINTS["notion.pages.retrieve"];
+
+LoggerLib.info({
+  message: "Endpoint resolved",
+  meta: {
+    system,
+    method,
+    endpoint: endpoint?.endpoint ?? ""
+  }
+});
+```
+
+Available registry objects:
+
+- `LoggerLib.ENDPOINTS`
+- `LoggerLib.GOOGLE_ENDPOINTS`
+- `LoggerLib.NOTION_ENDPOINTS`
+- `LoggerLib.SLACK_ENDPOINTS`
+
+---
+
 # Pipeline Design
 
 LoggerLib uses a **pipeline architecture**.
+
+This is an internal implementation detail.
+
+Library consumers use `LoggerLib.init()` and `LoggerLib.create()` rather than
+constructing pipelines or transports directly.
 
 ```
 LogRecord

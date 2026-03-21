@@ -12,7 +12,7 @@
  * structured information about Notion API interactions.
  */
 
-import { EndpointSpec } from "./types";
+import type { EndpointSpec } from "./types";
 
 const NOTION_ENDPOINTS: Record<string, EndpointSpec> = {
   "notion.pages.retrieve": {

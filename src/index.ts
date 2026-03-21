@@ -1,6 +1,18 @@
 // src/index.ts
 
 import { createLogger } from "./logger";
+import type {
+  InternalLogger,
+  LogRecord,
+} from "./internal-types";
+import {
+  ENDPOINTS,
+  inferSystemFromUrl,
+  normalizeMethod,
+} from "./endpoints";
+import { GOOGLE_ENDPOINTS } from "./google-endpoints";
+import { NOTION_ENDPOINTS } from "./notion-endpoints";
+import { SLACK_ENDPOINTS } from "./slack-endpoints";
 import {
   makeSheetsRowTransport,
   toOperationalRow,
@@ -11,40 +23,18 @@ import {
 } from "./sheets";
 
 import type {
-  Logger,
-  LoggerConfig,
+  InitConfig,
   LogInput,
-  LogRecord,
+  LoggerInstance,
   NetworkLogRecord,
-  OperationalLogRecord
+  OperationalLogRecord,
 } from "./types";
-
-/**
- * Public initialization config for LoggerLib.
- *
- * Used by consumer scripts when calling `LoggerLib.init()` or `LoggerLib.create()`.
- *
- * @property spreadsheetId Target spreadsheet where log sheets will be created or updated.
- * @property operationalSheet Optional sheet name for operational logs. Defaults to "Operational_Log".
- * @property networkSheet Optional sheet name for network logs. Defaults to "Network_Log".
- * @property operationalHeaders Optional custom headers for the operational log sheet.
- * @property networkHeaders Optional custom headers for the network log sheet.
- * @property level Minimum log severity to emit. Defaults to "INFO".
- */
-type InitConfig = {
-  spreadsheetId: string;
-  operationalSheet?: string;
-  networkSheet?: string;
-  operationalHeaders?: string[];
-  networkHeaders?: string[];
-  level?: LoggerConfig["level"];
-};
 
 /**
  * Singleton logger used by the simple global helper functions:
  * `log`, `debug`, `info`, `warn`, `error`, and `http`.
  */
-let singleton: Logger | null = null;
+let singleton: InternalLogger | null = null;
 
 /**
  * Build a configured logger instance with two Sheets pipelines:
@@ -61,7 +51,7 @@ let singleton: Logger | null = null;
  * @param config Consumer-provided logger initialization settings.
  * @returns A fully configured Logger instance.
  */
-function buildLogger(config: InitConfig): Logger {
+function buildLogger(config: InitConfig): InternalLogger {
   const opName = config.operationalSheet ?? "Operational_Log";
   const netName = config.networkSheet ?? "Network_Log";
   const level = config.level ?? "INFO";
@@ -82,6 +72,7 @@ function buildLogger(config: InitConfig): Logger {
 
   return createLogger<Row>({
     level,
+    console: config.console,
     pipelines: [
       {
         filter: (r: LogRecord) => r.kind === "operational",
@@ -159,7 +150,7 @@ function create(config: InitConfig) {
      *
      * @param input Error log input.
      */
-    error: (input: Parameters<Logger["error"]>[0]) => logger.error(input),
+    error: (input: Parameters<LoggerInstance["error"]>[0]) => logger.error(input),
 
     /**
      * Write a network/HTTP log record.
@@ -174,7 +165,7 @@ function create(config: InitConfig) {
      *
      * @param input Structured HTTP/network log input.
      */
-    http: (input: Parameters<Logger["http"]>[0]) => logger.http(input),
+    http: (input: Parameters<LoggerInstance["http"]>[0]) => logger.http(input),
 
     /**
      * Flush any buffered transports associated with this logger instance.
@@ -209,7 +200,7 @@ function log(input: LogInput) {
  * @returns The emitted network log record.
  * @throws Error if LoggerLib has not been initialized.
  */
-function http(input: Parameters<Logger["http"]>[0]) {
+function http(input: Parameters<LoggerInstance["http"]>[0]) {
   if (!singleton) {
     throw new Error(
       "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
@@ -277,7 +268,7 @@ function warn(input: LogInput) {
  * @returns The emitted operational log record.
  * @throws Error if LoggerLib has not been initialized.
  */
-function error(input: Parameters<Logger["error"]>[0]) {
+function error(input: Parameters<LoggerInstance["error"]>[0]) {
   if (!singleton) {
     throw new Error(
       "LoggerLib not initialized. Call LoggerLib.init({ spreadsheetId }) first."
@@ -328,4 +319,10 @@ function flush(): void {
   error,
   http,
   flush,
+  ENDPOINTS,
+  inferSystemFromUrl,
+  normalizeMethod,
+  GOOGLE_ENDPOINTS,
+  NOTION_ENDPOINTS,
+  SLACK_ENDPOINTS,
 };

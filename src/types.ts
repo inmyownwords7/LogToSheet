@@ -152,67 +152,31 @@ interface NetworkLogRecord extends BaseLogRecord {
   };
 }
 
-/** Any record the logger can emit. */
-type LogRecord = OperationalLogRecord | NetworkLogRecord;
-
 /**
- * Pipeline filter function.
+ * Public initialization config accepted by the library entrypoint.
  */
-type Filter = (record: LogRecord) => boolean;
-
-/**
- * Pipeline formatter function.
- */
-type Formatter<TPayload = unknown> = (record: LogRecord) => TPayload;
-
-/**
- * Transport contract.
- */
-interface Transport<TPayload = unknown> {
-  name: string;
-  write(payload: TPayload): void;
-  flush?(): void;
+interface InitConfig {
+  spreadsheetId: string;
+  operationalSheet?: string;
+  networkSheet?: string;
+  operationalHeaders?: string[];
+  networkHeaders?: string[];
+  level?: LogLevel;
+  /** Whether accepted records should also be written to `console`. Defaults to true. */
+  console?: boolean;
 }
 
 /**
- * Extended transport contract for transports that buffer writes.
+ * Public logger instance exposed to library consumers.
  */
-interface BufferedTransport<TPayload> extends Transport<TPayload> {
-  flush(): void;
-}
-
-/**
- * Pipeline contract.
- */
-interface Pipeline<TPayload = unknown> {
-  filter: Filter;
-  format: Formatter<TPayload>;
-  transport: Transport<TPayload>;
-}
-
-/**
- * Internal logger configuration used by `createLogger()`.
- */
-interface LoggerConfig<TPayload = unknown> {
-  level: LogLevel;
-  pipelines: Pipeline<TPayload>[];
-}
-
-/**
- * Public logger instance contract returned by `createLogger()`.
- *
- * Operational logs are the general ledger.
- * Network logs are specialized request records.
- */
-interface Logger {
-  log(level: LogLevel, input: LogInput): OperationalLogRecord;
+interface LoggerInstance {
+  log(input: LogInput): OperationalLogRecord;
   debug(input: LogInput): OperationalLogRecord;
   info(input: LogInput): OperationalLogRecord;
   warn(input: LogInput): OperationalLogRecord;
   error(
     input: LogInput | { message: string; error: unknown; meta?: Record<string, unknown> }
   ): OperationalLogRecord;
-
   http(
     input: Omit<NetworkLogRecord, keyof BaseLogRecord | "kind" | "level"> & {
       message?: string;
@@ -221,7 +185,6 @@ interface Logger {
       parentLogId?: LogId;
     }
   ): NetworkLogRecord;
-
   flush(): void;
 }
 
@@ -239,13 +202,7 @@ export {
   UrlParts,
   UrlInfo,
   NetworkLogRecord,
-  LogRecord,
-  Filter,
-  Formatter,
-  Transport,
-  BufferedTransport,
-  Pipeline,
-  LoggerConfig,
-  Logger,
   EndpointSpec,
+  InitConfig,
+  LoggerInstance,
 };
